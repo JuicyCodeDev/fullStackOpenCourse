@@ -33,6 +33,13 @@ const App = () => {
     if(checkDoubleEntry()){
       alert(`${newName} is already added to phonebook`)
       return
+      // if(window.confirm(`${newName} is already added to phonebook, replace the old number with a new one?`)){
+      //   service.edit(nameObject)
+      //     .then((response) => {
+      //       setPersons(persons.map((person) => person.id !== newName.id ? person : response.data));
+      //     })
+      //   return;
+      // }
     }
     const nameObject =  {
       name: newName,
@@ -50,6 +57,15 @@ const App = () => {
           setAction(null)
         }, 5000)
       })
+      .catch((error => {
+        console.log(error.response.data.error)
+        setActionName(error.response.data.error)
+        setAction('error')
+        setTimeout(() => {
+          setActionName(null)
+          setAction(null)
+        }, 5000)
+      }))
   }
 
   const addName = (event) => {
@@ -70,7 +86,9 @@ const App = () => {
         if (window.confirm(`Delete ${person.name}?`)) {
           axios.delete(`/api/persons/${event.target.id}`)
           .then(response => {
-            setPersons(persons.filter(o => o.id !== Number(event.target.id)));
+            setPersons(persons.filter((o) => {
+              return o.id !== event.target.id
+            }))
             setActionName(person.name)
               setAction("deleted")
               setTimeout(() => {

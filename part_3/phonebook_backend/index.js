@@ -1,103 +1,114 @@
-const express = require('express')
-const app = express()
-const morgan = require('morgan')
+/* eslint-disable consistent-return */
+/* eslint-disable no-unused-vars */
+require('dotenv').config();
 
-app.use(morgan('tiny'))
-app.use(express.static('build'))
-app.use(express.json())
+const express = require('express');
+const morgan = require('morgan');
+const Person = require('./models/mongo');
 
-let phone_book = [
-  { 
-    "id": 1,
-    "name": "Arto Hellas", 
-    "number": "040-123456"
-  },
-  { 
-    "id": 2,
-    "name": "Ada Lovelace", 
-    "number": "39-44-5323523"
-  },
-  { 
-    "id": 3,
-    "name": "Dan Abramov", 
-    "number": "12-43-234345"
-  },
-  { 
-    "id": 4,
-    "name": "Mary Poppendieck", 
-    "number": "39-23-6423122"
-  }
-]
+const app = express();
 
-const date = new Date
+app.use(morgan('tiny'));
+app.use(express.static('build'));
+app.use(express.json());
 
-app.get('/info', (request, response) => {
-  response.send(`
-    <div>Phonebook has info for ${phone_book.length} people</div>
-    <div>${date}</div>
-  `)
-})
+const date = new Date();
 
-app.get('/api/persons', (request, response) => {
-  response.json(phone_book);
-})
+app.get('/info', (request, response, next) => {
+  Person.find({})
+    .then((people) => {
+      response.send(`
+        <div>Phonebook has info for ${people.length} people</div>
+        <div>${date}</div>
+      `);
+    })
+    .catch((error) => next(error));
+});
 
-app.get('/api/persons/:id', (request, response) => {
-  const id = Number(request.params.id)
-  const contact = phone_book.find(contact => contact.id === id)
-  if(contact) {
-    response.json(contact)
-  } else {
-    response.status(404).end()
-  }
-})
+app.get('/api/persons', (request, response, next) => {
+  Person.find({})
+    .then((people) => {
+      response.json(people);
+    })
+    .catch((error) => next(error));
+});
 
-app.delete('/api/persons/:id', (request, response) => {
-  const id = Number(request.params.id)
-  phone_book = phone_book.filter(contact => contact.id !== id)
+app.get('/api/persons/:id', (request, response, next) => {
+  Person.findById(request.params.id)
+    .then((contact) => {
+      if (contact) {
+        response.json(contact);
+      } else {
+        response.status(404).end();
+      }
+    })
+    .catch((error) => next(error));
+});
 
-  response.status(204).end()
-})
+app.delete('/api/persons/:id', (request, response, next) => {
+  Person.findByIdAndRemove(request.params.id)
+    .then((result) => {
+      response.status(204).end();
+    })
+    .catch((error) => next(error));
+});
 
-const generateId = () => {
-  return Math.floor(Math.random() * 500)
-}
-
-app.post('/api/persons', (request, response) => {
-  const body = request.body
+app.post('/api/persons', (request, response, next) => {
+  const { body } = request;
 
   if (!body.name) {
-    return response.status(400).json({ 
-      error: 'name missing' 
-    })
+    return response.status(400).json({
+      error: 'name missing',
+    });
   }
 
   if (!body.number) {
-    return response.status(400).json({ 
-      error: 'number missing' 
-    })
+    return response.status(400).json({
+      error: 'number missing',
+    });
   }
 
-  for(let person of phone_book) {
-    if (person.name === body.name) {
-      return response.status(400).json({ 
-        error: 'name already exsists' 
-      })
-    }
-  }
+  const person = new Person({
+    name: body.name,
+    number: body.number,
+  });
+
+  person.save()
+    .then((newPerson) => {
+      response.json(newPerson);
+    })
+    .catch((error) => next(error));
+});
+
+app.put('/api/person/:id', (request, response, next) => {
+  const { body } = request;
 
   const person = {
-    id: generateId(),
     name: body.name,
-    number: body.number
+    number: body.number,
+  };
+
+  Person.findByIdAndUpdate(request.params.id, person, { new: true })
+    .then((updatedContact) => {
+      response.json(updatedContact);
+    })
+    .catch((error) => next(error));
+});
+
+const errorHandler = (error, request, response, next) => {
+  console.error(error.message);
+  if (error.name === 'CastError') {
+    return response.status(404).send({ error: 'unknown endpoint' });
   }
+  if (error.name === 'ValidationError') {
+    return response.status(400).json({ error: error.message });
+  }
+  next(error);
+};
 
-  phone_book = phone_book.concat(person)
+app.use(errorHandler);
 
-  response.json(phone_book)
-})
-
-const PORT = process.env.PORT || 3001
+const { PORT } = process.env;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`)
-})
+  console.log(`Server running on port ${PORT}`);
+});
